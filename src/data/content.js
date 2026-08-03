@@ -12,7 +12,6 @@ export const WHY_SOLAR = [
   {
     id: "clean",
     icon: "leaf",
-    emoji: "🌿",
     title: "Clean, Renewable Power",
     body: "Lower your carbon footprint. Solar allows you to run your home using the most abundant, eco-friendly energy source available.",
     image: "/assets/why-clean-power.jpg",
@@ -21,7 +20,6 @@ export const WHY_SOLAR = [
   {
     id: "bills",
     icon: "hardhat",
-    emoji: "💰",
     title: "Drastically Reduce Bills",
     body: "A highly cost-effective upgrade that protects you from constantly rising electric rates. Recoup your initial investment in 4 to 5 years.",
     image: "/assets/why-reduce-bills.jpg",
@@ -30,7 +28,6 @@ export const WHY_SOLAR = [
   {
     id: "export",
     icon: "grid",
-    emoji: "⚡",
     title: "Sell Your Excess Power",
     body: "Don't let unused daytime energy go to waste. Export your surplus power back to the grid through Net-Metering.",
     image: "/assets/why-sell-power.jpg",
