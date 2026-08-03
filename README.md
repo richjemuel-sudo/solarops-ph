@@ -145,10 +145,47 @@ grid-tied one.
 saves it — split that way so the layout can be rendered and inspected in a test
 without a DOM.
 
+The header loads `/assets/solarops-ph-logo.png` at runtime via `fetch`, so the
+PDF and the site always show the same mark. It sits on a white chip because the
+logo contains navy, and the width is capped at 62 mm so a wide mark can't run
+into the title block. If the file is missing the header falls back to a drawn
+sun-and-roofline rather than failing the download.
+
 One constraint worth knowing: jsPDF's built-in fonts use WinAnsi encoding,
 which has no ₱ glyph, so the PDF prints `PHP 12,500` instead. Embedding a
 Unicode font would add roughly 300 KB for a single character. The web UI still
 uses ₱ throughout.
+
+## Hero sky cycle
+
+The hero runs a looping day/night cycle in pure CSS — no images, no JS, no
+canvas. Four fixed gradients (dawn, day, dusk, night) cross-fade over the photo
+with `mix-blend-mode: soft-light`, plus a darkening layer for night, a sun that
+tracks an arc, and a tiled starfield that only appears after dusk. Because it
+tints the existing photo rather than replacing the sky, it works with whatever
+hero image you drop in.
+
+Speed is one variable. `Hero.jsx` sets it inline:
+
+```jsx
+style={{ "--sky-duration": "60s" }}
+```
+
+Drop it to `6s` while you're tuning the look, then put it back — waiting a
+minute per loop to check the dusk phase gets old fast.
+
+Two things that are easy to break if you refactor this:
+
+- The sky layers are **direct siblings of the `<img>`, not wrapped in a
+  positioned div**. `mix-blend-mode` blends against the nearest stacking
+  context, so a `z-index`-ed wrapper would make them blend against the wrapper
+  (transparent) and the tint would silently do nothing. Layering is DOM order;
+  only the text block carries a `z-index`.
+- The keyframe opacities are tuned so the four tints never stack above 1.0 and
+  never all drop out at once. If you shift one phase, shift its neighbours.
+
+`prefers-reduced-motion` freezes the whole thing at midday rather than leaving
+a blank sky.
 
 ## Accessibility
 

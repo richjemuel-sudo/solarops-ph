@@ -21,7 +21,7 @@ export default function Navbar() {
         className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:h-24 lg:px-8"
       >
         <a href="#top" className="rounded-lg" aria-label="SolarOps PH — home">
-          <Logo className="h-13 w-13 sm:h-18 lg:h-15" />
+          <Logo className="h-13 w-13 sm:h-17 lg:h-18" />
         </a>
 
         {/* Desktop */}

@@ -5,7 +5,7 @@
 @layer base {
   html {
     scroll-behavior: smooth;
-    scroll-padding-top: 6rem; /* clears the sticky navbar on anchor jumps */
+    scroll-padding-top: 7rem; /* clears the sticky navbar on anchor jumps */
   }
 
   body {
@@ -39,4 +39,192 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ------------------------------------------------------------------------
+   Hero sky cycle — dawn to day to dusk to night, on a loop.
+
+   Four fixed gradients cross-fade rather than one gradient animating its
+   colour stops: browsers only interpolate stops when the structure matches
+   exactly, and cross-fading opacity is smooth everywhere. Each layer blends
+   onto the hero photo, so it tints the existing image instead of replacing
+   the sky — works with any photo you drop in.
+
+   Timing is one variable: --sky-duration on .sky-cycle.
+------------------------------------------------------------------------- */
+
+@layer components {
+  .sky-cycle {
+    --sky-duration: 60s;
+  }
+
+  .sky-phase {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    mix-blend-mode: soft-light;
+    animation-duration: var(--sky-duration);
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    will-change: opacity;
+  }
+
+  .sky-dawn {
+    background: linear-gradient(
+      180deg,
+      #2a1b4a 0%,
+      #b8497a 32%,
+      #ff8c42 62%,
+      #ffd89b 100%
+    );
+    animation-name: sky-dawn;
+  }
+
+  .sky-day {
+    background: linear-gradient(
+      180deg,
+      #1e6fd9 0%,
+      #5fa8e8 45%,
+      #bfe0f5 100%
+    );
+    animation-name: sky-day;
+  }
+
+  .sky-dusk {
+    background: linear-gradient(
+      180deg,
+      #1a2a5e 0%,
+      #c4562f 45%,
+      #ff9a3c 75%,
+      #ffc76b 100%
+    );
+    animation-name: sky-dusk;
+  }
+
+  .sky-night {
+    background: linear-gradient(
+      180deg,
+      #050a1f 0%,
+      #0d1a3d 55%,
+      #1a2c55 100%
+    );
+    animation-name: sky-night;
+  }
+
+  /* Night needs real darkening, not just a tint — soft-light alone can't
+     take a daylit photo down to dusk. */
+  .sky-darken {
+    position: absolute;
+    inset: 0;
+    background: #050a1f;
+    opacity: 0;
+    animation: sky-darken var(--sky-duration) ease-in-out infinite;
+    will-change: opacity;
+  }
+
+  /* Sun: a soft radial glow tracking an arc across the sky. */
+  .sky-sun {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 22vh;
+    width: 22vh;
+    border-radius: 9999px;
+    background: radial-gradient(
+      circle,
+      rgba(255, 248, 220, 0.95) 0%,
+      rgba(255, 204, 0, 0.55) 35%,
+      rgba(255, 145, 40, 0.18) 60%,
+      transparent 72%
+    );
+    mix-blend-mode: screen;
+    opacity: 0;
+    animation: sky-sun var(--sky-duration) ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  /* Starfield: three tiled radial-gradient layers at different scales, so
+     the pattern doesn't read as a regular grid. */
+  .sky-stars {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    mix-blend-mode: screen;
+    background-image:
+      radial-gradient(1.4px 1.4px at 18% 22%, #ffffff, transparent),
+      radial-gradient(1px 1px at 62% 14%, rgba(255, 255, 255, 0.85), transparent),
+      radial-gradient(1.6px 1.6px at 41% 63%, #ffffff, transparent),
+      radial-gradient(1px 1px at 84% 47%, rgba(255, 255, 255, 0.7), transparent),
+      radial-gradient(1.2px 1.2px at 9% 71%, rgba(255, 255, 255, 0.9), transparent),
+      radial-gradient(1px 1px at 73% 82%, rgba(255, 255, 255, 0.6), transparent);
+    background-size: 340px 300px, 420px 380px, 520px 460px, 300px 340px,
+      460px 400px, 380px 420px;
+    animation: sky-stars var(--sky-duration) ease-in-out infinite;
+  }
+}
+
+@keyframes sky-dawn {
+  0%, 8% { opacity: 0.9; }
+  24% { opacity: 0; }
+  92% { opacity: 0; }
+  100% { opacity: 0.9; }
+}
+
+@keyframes sky-day {
+  0%, 14% { opacity: 0; }
+  30%, 50% { opacity: 0.85; }
+  62%, 100% { opacity: 0; }
+}
+
+@keyframes sky-dusk {
+  0%, 54% { opacity: 0; }
+  67%, 75% { opacity: 0.95; }
+  86%, 100% { opacity: 0; }
+}
+
+@keyframes sky-night {
+  0% { opacity: 0; }
+  78% { opacity: 0; }
+  88%, 92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes sky-darken {
+  0% { opacity: 0.3; }
+  22%, 48% { opacity: 0; }
+  68% { opacity: 0.22; }
+  88%, 95% { opacity: 0.62; }
+  100% { opacity: 0.3; }
+}
+
+@keyframes sky-sun {
+  /* Rising at the left, overhead at midday, setting at the right. */
+  0% { transform: translate(6vw, 62vh) scale(0.85); opacity: 0.55; }
+  10% { opacity: 0.9; }
+  28% { transform: translate(32vw, 14vh) scale(0.7); opacity: 1; }
+  50% { transform: translate(62vw, 8vh) scale(0.75); opacity: 1; }
+  68% { transform: translate(86vw, 56vh) scale(1.1); opacity: 0.85; }
+  76% { transform: translate(92vw, 74vh) scale(1.2); opacity: 0; }
+  /* Hidden while it travels back around to sunrise. */
+  77%, 96% { transform: translate(6vw, 78vh) scale(0.85); opacity: 0; }
+  100% { transform: translate(6vw, 62vh) scale(0.85); opacity: 0.55; }
+}
+
+@keyframes sky-stars {
+  0% { opacity: 0.25; }
+  12%, 66% { opacity: 0; }
+  86%, 96% { opacity: 0.9; }
+  100% { opacity: 0.25; }
+}
+
+/* Anyone who asked for less motion gets a still daytime sky, not a blank one. */
+@media (prefers-reduced-motion: reduce) {
+  .sky-phase,
+  .sky-darken,
+  .sky-sun,
+  .sky-stars {
+    animation: none !important;
+  }
+  .sky-day { opacity: 0.85; }
+  .sky-sun { opacity: 0.9; transform: translate(62vw, 10vh) scale(0.75); }
 }

@@ -98,7 +98,7 @@ export const QUICK_LINKS = [
 export const LEARN_LINKS = [
   {
     label: "Net Metering Explained",
-    href: "https://doe.gov.ph/net-metering-home",
+    href: "https://company.meralco.com.ph/advocacies/solar-net-metering/what-is-net-metering",
   },
   {
     label: "Grid-tied vs Hybrid vs Off-grid",
