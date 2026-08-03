@@ -4,7 +4,11 @@ Free solar sizing calculator for Philippine homes. Enter a monthly electric
 bill, pick a system type, and get a system size, installed-cost range, and
 payback period.
 
+
+
 <img width="1365" height="641" alt="Image" src="https://github.com/user-attachments/assets/3565760d-1e2d-4e1e-8bb9-91dd9ca851e2" />
+
+<img width="1079" height="2051" alt="Image" src="https://github.com/user-attachments/assets/567a8f3b-ef82-44ee-8885-c2617eb3ac32" />
 
 <img width="1359" height="643" alt="Image" src="https://github.com/user-attachments/assets/8ebec190-0ed0-42fd-a2fe-17813c58f40a" />
 
