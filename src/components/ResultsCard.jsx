@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
-import { peso, pesoShort, formatRuntime } from "../lib/estimate";
+import {
+  peso,
+  pesoShort,
+  formatRuntime,
+  formatArraySize,
+  pluralize,
+} from "../lib/estimate";
 
 const EMPTY = "—";
 
@@ -45,7 +51,7 @@ export default function ResultsCard({ result }) {
     setBuilding(true);
     try {
       const { generateBlueprint } = await import("../lib/blueprint");
-      generateBlueprint(result);
+      await generateBlueprint(result);
     } catch (err) {
       console.error("Blueprint generation failed:", err);
       setPdfError("Couldn't build the PDF. Please try again.");
@@ -84,8 +90,14 @@ export default function ResultsCard({ result }) {
               <span className="text-white/50 line-through decoration-white/40">
                 {peso(result.billAmount)}
               </span>{" "}
-              now → {peso(result.newBill)} with solar
+              now → {result.offGrid ? "no utility bill" : peso(result.newBill)}
             </p>
+            {result.offGrid && (
+              <p className="mt-1 font-body text-[11px] text-white/60">
+                Off-grid means disconnecting from {result.utility.acronym}{" "}
+                entirely — there's no bill left to pay.
+              </p>
+            )}
             <p className="mt-2 font-body text-[11px] text-white/50">
               Based on {result.utility.acronym}
               {result.utility.estimated
@@ -104,13 +116,15 @@ export default function ResultsCard({ result }) {
           value={
             empty
               ? EMPTY
-              : `${result.kwp.toFixed(1)} kWp ${result.system.label} system`
+              : `${formatArraySize(result.kwp)} ${result.system.label} system`
           }
           note={
             result &&
-            `${result.panels} panels × 600 W · ${result.inverterKw} kW inverter · roughly ${Math.ceil(
-              result.roofArea
-            )} sqm of roof.`
+            `${pluralize(result.panel.count, "panel")} × ${
+              result.panel.watts
+            } W · ${result.inverter.ratedKw} kW ${
+              result.offGrid ? "off-grid" : result.system.value
+            } inverter · roughly ${Math.ceil(result.roofArea)} sqm of roof.`
           }
         />
 
@@ -120,9 +134,11 @@ export default function ResultsCard({ result }) {
           value={empty ? EMPTY : `${peso(result.monthlySavings)} / month`}
           note={
             result &&
-            `Covers about ${Math.round(
-              result.system.offset * 100
-            )}% of your usage. Grows as rates rise.`
+            (result.offGrid
+              ? "Your entire bill, since you're no longer buying power."
+              : `Covers about ${Math.round(
+                  result.system.offset * 100
+                )}% of your usage. Grows as rates rise.`)
           }
         />
 

@@ -6,7 +6,7 @@ import {
   DERATE,
   PANEL_WATTS,
 } from "../data/content";
-import { formatRuntime } from "./estimate";
+import { formatRuntime, formatArraySize, pluralize } from "./estimate";
 
 /* ---------------------------------------------------------------- palette */
 
@@ -18,6 +18,35 @@ const CREAM = [244, 243, 225];
 const WHITE = [255, 255, 255];
 
 const MARGIN = 16;
+
+/* ------------------------------------------------------------------ logo */
+
+export const LOGO_URL = "/assets/solarops-ph-logo.png";
+
+/**
+ * Fetches the brand logo and returns it as a data URL plus its natural aspect
+ * ratio. Returns null if the file is missing or unreachable — the header then
+ * falls back to a drawn mark rather than failing the whole download.
+ */
+async function loadLogo(doc) {
+  try {
+    const res = await fetch(LOGO_URL);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+
+    const props = doc.getImageProperties(dataUrl);
+    return { dataUrl, ratio: props.width / props.height };
+  } catch {
+    return null;
+  }
+}
 
 /* --------------------------------------------------------------- helpers */
 
@@ -72,30 +101,53 @@ const tableTheme = {
 
 /* ----------------------------------------------------------------- cover */
 
-function drawHeader(doc, result) {
+function drawHeader(doc, result, logo) {
   const w = doc.internal.pageSize.getWidth();
 
   doc.setFillColor(...NAVY_DEEP);
   doc.rect(0, 0, w, 42, "F");
 
-  // Sun, sitting above the roof peak
-  doc.setFillColor(...SOLAR);
-  doc.circle(MARGIN + 9, 13, 3, "F");
-  // Roofline
-  doc.setDrawColor(...SOLAR);
-  doc.setLineWidth(1);
-  doc.line(MARGIN, 24, MARGIN + 5, 19);
-  doc.line(MARGIN + 5, 19, MARGIN + 10, 24);
+  if (logo) {
+    // The logo has navy in it, so it needs a light chip to sit on — same
+    // treatment as the footer on the site. Width is capped so an unusually
+    // wide mark can't run into the title block on the right.
+    const MAX_LOGO_W = 62;
+    let logoH = 16;
+    let logoW = logoH * logo.ratio;
+    if (logoW > MAX_LOGO_W) {
+      logoW = MAX_LOGO_W;
+      logoH = logoW / logo.ratio;
+    }
+    const chipH = logoH + 8;
+    doc.setFillColor(...WHITE);
+    doc.roundedRect(MARGIN, (42 - chipH) / 2, logoW + 8, chipH, 2, 2, "F");
+    doc.addImage(
+      logo.dataUrl,
+      "PNG",
+      MARGIN + 4,
+      (42 - chipH) / 2 + 4,
+      logoW,
+      logoH
+    );
+  } else {
+    // Fallback mark, so a missing asset never breaks the download.
+    doc.setFillColor(...SOLAR);
+    doc.circle(MARGIN + 9, 13, 3, "F");
+    doc.setDrawColor(...SOLAR);
+    doc.setLineWidth(1);
+    doc.line(MARGIN, 24, MARGIN + 5, 19);
+    doc.line(MARGIN + 5, 19, MARGIN + 10, 24);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(...WHITE);
-  doc.text("SolarOps PH", MARGIN + 16, 20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(...WHITE);
+    doc.text("SolarOps PH", MARGIN + 16, 20);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(200, 208, 230);
-  doc.text("SOLAR ESTIMATOR", MARGIN + 16, 25);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(200, 208, 230);
+    doc.text("SOLAR ESTIMATOR", MARGIN + 16, 25);
+  }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
@@ -120,7 +172,7 @@ function drawHighlights(doc, result, y) {
   const boxW = (w - MARGIN * 2 - 8) / 3;
 
   const cells = [
-    ["System size", `${result.kwp.toFixed(1)} kWp`],
+    ["System size", formatArraySize(result.kwp)],
     [
       "Estimated investment",
       `${php(Math.round(result.costLow / 1000) * 1000)}\n- ${php(
@@ -178,12 +230,13 @@ function drawFooters(doc) {
  * Builds the blueprint document. Split out from the download so the layout can
  * be exercised in tests without touching the filesystem or the DOM.
  */
-export function buildBlueprint(result) {
+export async function buildBlueprint(result) {
   if (!result) throw new Error("Nothing to generate — run a calculation first.");
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const logo = await loadLogo(doc);
 
-  drawHeader(doc, result);
+  drawHeader(doc, result, logo);
   let y = drawHighlights(doc, result, 50);
 
   /* ------------------------------------------------ what you told us */
@@ -219,64 +272,212 @@ export function buildBlueprint(result) {
   });
   y = doc.lastAutoTable.finalY + 10;
 
-  /* ------------------------------------------------- recommended kit */
+  /* --------------------------------------------------- panel array */
 
-  y = sectionHeading(doc, "Recommended system", y);
-
-  const kit = [
-    ["Array size", `${result.kwp.toFixed(2)} kWp`],
-    [
-      "Solar panels",
-      `${result.panels} panels at ${PANEL_WATTS} W (${(
-        (result.panels * PANEL_WATTS) /
-        1000
-      ).toFixed(2)} kWp installed)`,
+  y = sectionHeading(doc, "Solar array specification", y);
+  autoTable(doc, {
+    ...tableTheme,
+    startY: y,
+    head: [["Item", "Specification"]],
+    body: [
+      ["Required array size", formatArraySize(result.kwp)],
+      [
+        "Panels",
+        `${pluralize(result.panel.count, "panel")} at ${
+          result.panel.watts
+        } W each`,
+      ],
+      [
+        "Installed capacity",
+        `${formatArraySize(result.panel.installedKwp)} (${
+          result.panel.count
+        } x ${result.panel.watts} W)`,
+      ],
+      ["Cell technology", result.panel.technology],
+      [
+        "Array footprint",
+        `about ${result.panel.arraySqm.toFixed(
+          1
+        )} sqm of panel; allow about ${Math.ceil(
+          result.roofArea
+        )} sqm of roof with walkways and setbacks`,
+      ],
+      [
+        "Expected output",
+        `about ${(result.kwp * PEAK_SUN_HOURS * DERATE).toFixed(
+          1
+        )} kWh per day at ${PEAK_SUN_HOURS} peak sun hours and ${DERATE} derate`,
+      ],
+      ["Panel warranty", `${result.panel.warrantyYears} year performance warranty`],
     ],
-    ["Inverter", `${result.inverterKw} kW ${result.system.label.toLowerCase()}`],
-    ["Roof area needed", `about ${Math.ceil(result.roofArea)} sqm`],
+    columnStyles: { 0: { cellWidth: 50, fontStyle: "bold", textColor: NAVY } },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  /* ------------------------------------------------------- inverter */
+
+  if (y > 215) {
+    doc.addPage();
+    y = 24;
+  }
+  y = sectionHeading(doc, "Inverter specification", y);
+
+  const inverterRows = [
+    ["Rated capacity", `${result.inverter.ratedKw} kW`],
+    ["Type", result.inverter.family],
+    [
+      "Minimum required",
+      `${result.inverter.requiredKw} kW - set by ${result.inverter.driver}`,
+    ],
+    [
+      "Sizing rule",
+      "Twice the array capacity, so there is headroom for motor starting surge rather than steady-state capacity alone.",
+    ],
+    [
+      "Maximum DC input",
+      `up to about ${result.inverter.maxDcInputKwp} kWp of panels on this unit`,
+    ],
   ];
 
   if (result.battery) {
-    kit.push(
-      [
-        "Battery bank",
-        `${result.battery.nominalKwh.toFixed(2)} kWh - ${result.battery.spec}`,
-      ],
-      [
-        "Usable capacity",
-        `${(result.battery.usableWh / 1000).toFixed(
-          2
-        )} kWh at 90% depth of discharge, after inverter losses`,
-      ]
-    );
-    if (result.battery.undersized) {
-      kit.push([
-        "Note",
-        "This load exceeds a standard residential bank. A custom multi-bank design is required.",
-      ]);
-    }
-  } else {
-    kit.push([
-      "Battery bank",
-      "None. Grid-tied systems shut down during an outage, by design.",
+    inverterRows.push([
+      "Battery voltage",
+      `must accept a ${result.battery.voltage} V (${result.battery.voltageLabel}) LiFePO4 bank`,
     ]);
   }
-
   if (result.loads) {
-    kit.push([
-      "Inverter surge check",
-      `${Math.round(
-        result.loads.peakSurgeW
-      ).toLocaleString("en-PH")} W - running load plus the largest motor starting`,
+    inverterRows.push([
+      "Continuous load",
+      `${Math.round(result.loads.totalRunningW).toLocaleString("en-PH")} W of selected appliances`,
+    ]);
+    inverterRows.push([
+      "Surge requirement",
+      `${Math.round(result.loads.peakSurgeW).toLocaleString(
+        "en-PH"
+      )} W - running load plus the largest motor starting`,
+    ]);
+  }
+  inverterRows.push(["Note", result.inverter.note]);
+  if (result.inverter.undersized) {
+    inverterRows.push([
+      "Warning",
+      "This requirement exceeds a single residential inverter. Stacked units or a three-phase design are needed.",
     ]);
   }
 
   autoTable(doc, {
     ...tableTheme,
     startY: y,
-    head: [["Component", "Specification"]],
-    body: kit,
-    columnStyles: { 0: { cellWidth: 55, fontStyle: "bold", textColor: NAVY } },
+    head: [["Item", "Specification"]],
+    body: inverterRows,
+    columnStyles: { 0: { cellWidth: 50, fontStyle: "bold", textColor: NAVY } },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  /* -------------------------------------------------------- battery */
+
+  if (y > 215) {
+    doc.addPage();
+    y = 24;
+  }
+  y = sectionHeading(doc, "Battery specification", y);
+
+  const batteryRows = result.battery
+    ? [
+        ["Configuration", result.battery.spec],
+        ["Nominal capacity", `${result.battery.nominalKwh.toFixed(2)} kWh`],
+        [
+          "Bank layout",
+          result.battery.strings === 1
+            ? `single ${result.battery.unitAh} Ah battery`
+            : `${result.battery.strings} x ${result.battery.unitAh} Ah in parallel (${result.battery.ampHours} Ah total)`,
+        ],
+        ["Nominal voltage", `${result.battery.voltage} V (${result.battery.voltageLabel} class)`],
+        ["Chemistry", "LiFePO4 (lithium iron phosphate)"],
+        [
+          "Usable energy",
+          `${(result.battery.usableWh / 1000).toFixed(
+            2
+          )} kWh at 90% depth of discharge, after inverter losses`,
+        ],
+        [
+          "Design backup window",
+          `${result.battery.targetHours} hours at the diversified household load`,
+        ],
+        [
+          "Energy required",
+          `${result.battery.requiredKwh.toFixed(
+            2
+          )} kWh - rounded up to the nearest standard capacity`,
+        ],
+      ]
+    : [
+        [
+          "Battery bank",
+          "None. Grid-tied systems disconnect during an outage, by design, so there is nothing to keep running.",
+        ],
+        [
+          "If you want backup",
+          "Switch to a hybrid system. That adds a battery port, a transfer switch and the bank itself.",
+        ],
+      ];
+
+  if (result.battery?.undersized) {
+    batteryRows.push([
+      "Warning",
+      "This load exceeds a standard residential bank. A custom multi-bank design with its own switchgear is required.",
+    ]);
+  }
+
+  autoTable(doc, {
+    ...tableTheme,
+    startY: y,
+    head: [["Item", "Specification"]],
+    body: batteryRows,
+    columnStyles: { 0: { cellWidth: 50, fontStyle: "bold", textColor: NAVY } },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  /* -------------------------------------------- balance of system */
+
+  if (y > 215) {
+    doc.addPage();
+    y = 24;
+  }
+  y = sectionHeading(doc, "Balance of system and installation", y);
+  autoTable(doc, {
+    ...tableTheme,
+    startY: y,
+    head: [["Item", "What it covers"]],
+    body: [
+      [
+        "Mounting and racking",
+        "Rails, roof hooks or ballast, clamps and earthing for the array.",
+      ],
+      [
+        "DC side",
+        "PV cable, MC4 connectors, DC breakers or fuses, surge protection and a DC disconnect.",
+      ],
+      [
+        "AC side",
+        "AC breakers, changeover or transfer switch, metering point wiring and the bond to your existing panel.",
+      ],
+      [
+        "Protection and earthing",
+        "Grounding electrode, equipment bonding and surge protection on both DC and AC sides.",
+      ],
+      [
+        "Labor and installation",
+        "Site survey, structural check, mounting, wiring, commissioning and handover testing.",
+      ],
+      [
+        "Permits and documentation",
+        result.offGrid
+          ? "Local electrical permit and inspection. No utility application, since the system is not connected to the grid."
+          : "Local electrical permit, inspection, and the net-metering application with your distribution utility.",
+      ],
+    ],
+    columnStyles: { 0: { cellWidth: 50, fontStyle: "bold", textColor: NAVY } },
   });
   y = doc.lastAutoTable.finalY + 10;
 
@@ -307,6 +508,58 @@ export function buildBlueprint(result) {
     columnStyles: { 0: { cellWidth: 65, fontStyle: "bold", textColor: NAVY } },
   });
   y = doc.lastAutoTable.finalY + 10;
+
+  /* ----------------------------------------------- cost breakdown */
+
+  if (y > 200) {
+    doc.addPage();
+    y = 24;
+  }
+  y = sectionHeading(doc, "Where the money goes", y);
+  autoTable(doc, {
+    ...tableTheme,
+    startY: y,
+    head: [["Line item", "Share", "Estimated range"]],
+    body: [
+      ...result.costItems.map((item) => [
+        item.label,
+        `${Math.round(item.share * 100)}%`,
+        `${php(item.low)} - ${php(item.high)}`,
+      ]),
+      [
+        "Total installed cost",
+        "100%",
+        `${php(result.costLow)} - ${php(result.costHigh)}`,
+      ],
+    ],
+    columnStyles: {
+      0: { cellWidth: 75 },
+      1: { halign: "center", cellWidth: 20 },
+      2: { halign: "right" },
+    },
+    didParseCell: (data) => {
+      const last = data.table.body.length - 1;
+      if (data.section === "body" && data.row.index === last) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.textColor = NAVY;
+        data.cell.styles.fillColor = CREAM;
+      }
+    },
+  });
+  y = doc.lastAutoTable.finalY + 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...SLATE);
+  doc.text(
+    doc.splitTextToSize(
+      "Shares are typical for a Philippine residential installation of this type. Actual quotations vary with brand tier, roof access and how far the array sits from the service panel. Use this to sanity-check a supplier's quotation, not to replace one.",
+      doc.internal.pageSize.getWidth() - MARGIN * 2
+    ),
+    MARGIN,
+    y + 2
+  );
+  y += 16;
 
   /* ------------------------------------------------ backup coverage */
 
@@ -434,6 +687,7 @@ export function blueprintFilename(result) {
  * Builds the PDF and triggers the download. Everything runs in the browser —
  * no server, so the user's bill never leaves their machine.
  */
-export function generateBlueprint(result) {
-  buildBlueprint(result).save(blueprintFilename(result));
+export async function generateBlueprint(result) {
+  const doc = await buildBlueprint(result);
+  doc.save(blueprintFilename(result));
 }

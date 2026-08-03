@@ -18,10 +18,10 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 border-b border-navy/10 bg-white/95 backdrop-blur-glass">
       <nav
         aria-label="Main"
-        className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:h-20 lg:px-8"
+        className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:h-24 lg:px-8"
       >
         <a href="#top" className="rounded-lg" aria-label="SolarOps PH — home">
-          <Logo />
+          <Logo className="h-13 w-13 sm:h-18 lg:h-15" />
         </a>
 
         {/* Desktop */}

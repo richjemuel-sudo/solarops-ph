@@ -61,6 +61,18 @@ energy earns generation-cost credits under net metering rather than the full
 retail rate.
 
 Grid-tied is sized to cover 85% of consumption, hybrid 90%, off-grid 100%.
+Off-grid also zeroes the bill outright rather than discounting it — you are
+disconnected from the utility, so there is nothing left to pay.
+
+Array size prints as watts-peak below 1 kWp (`600 Wp`, not `0.6 kWp`).
+
+Inverter capacity is the largest of: **twice the array** (headroom for motor
+starting surge, not just steady-state), the running load plus 25%, or the
+running load plus the largest motor's startup surge. That figure is then
+rounded up to a capacity actually sold — 1.6, 2.4, 3.2, 3.6, 4.2, 5, 6, 8, 10,
+12, 16, 20, 25, 30 kW. A 700 Wp array therefore lands on a 1.6 kW inverter.
+Because inverter capacity sets bank voltage, it is computed before the
+battery.
 
 Battery capacity is driven by the appliances the user marks as priorities.
 Combined nameplate load is multiplied by a 0.45 diversity factor (households
@@ -115,9 +127,19 @@ browser — the user's bill never leaves their machine, and there's no backend t
 deploy. jsPDF is dynamically imported from `ResultsCard`, so its ~350 KB stays
 out of the initial bundle until someone clicks the button.
 
-Sections: headline figures, the inputs used, the recommended system, cost and
-return, the backup coverage table (only when a battery system has priority
-appliances), and the assumptions behind every number.
+Sections: headline figures, the inputs used, a full **solar array
+specification** (panel count, technology, footprint, expected daily output,
+warranty), an **inverter specification** (rated capacity, type, what drove the
+sizing, max DC input, surge requirement), a **battery specification** (bank
+layout, chemistry, usable energy, design backup window), **balance of system
+and installation** (mounting, DC side, AC side, protection and earthing, labor,
+permits), cost and return, a **"where the money goes"** breakdown by line item,
+the backup coverage table when applicable, and the assumptions behind every
+number.
+
+Cost shares per line item live in `COST_BREAKDOWN` in `data/content.js` and
+differ by system type — a battery is 40% of an off-grid job and 0% of a
+grid-tied one.
 
 `buildBlueprint(result)` returns the jsPDF document and `generateBlueprint()`
 saves it — split that way so the layout can be rendered and inspected in a test

@@ -152,3 +152,69 @@ export const PEAK_SUN_HOURS = 4.5; // annual daily average, kWh/m²/day
 export const DERATE = 0.8; // wiring, heat, inverter and soiling losses
 export const PANEL_WATTS = 600;
 export const SQM_PER_KWP = 6;
+
+/* --------------------------------------------------------------- hardware */
+
+// Panel assumed for sizing. Update together with PANEL_WATTS.
+export const PANEL_SPEC = {
+  watts: 600,
+  technology: "Monocrystalline N-type TOPCon",
+  areaSqm: 2.6,
+  warrantyYears: 25,
+};
+
+// Inverter capacities actually sold in the Philippines, in kW. The sizer picks
+// the smallest one that clears the requirement — you can't buy 3.1 kW.
+export const INVERTER_SIZES_KW = [
+  1.6, 2.4, 3.2, 3.6, 4.2, 5, 6, 8, 10, 12, 16, 20, 25, 30,
+];
+
+// Inverter family per system type, for the spec sheet.
+export const INVERTER_TYPES = {
+  "grid-tied": {
+    family: "Grid-tie string inverter",
+    note: "Anti-islanding protection required for net metering. No battery port.",
+  },
+  hybrid: {
+    family: "Hybrid inverter with battery port and AC transfer",
+    note: "Switches to battery on grid failure. Needs a changeover to isolate from the utility.",
+  },
+  "off-grid": {
+    family: "Off-grid inverter/charger",
+    note: "Runs the loads entirely from the battery. No utility connection.",
+  },
+};
+
+/**
+ * Where the money goes, as a share of installed cost. Shares differ by system
+ * type — a battery is a third of an off-grid job and none of a grid-tied one.
+ * Each set sums to 1.
+ */
+export const COST_BREAKDOWN = {
+  "grid-tied": [
+    { key: "panels", label: "Solar panels", share: 0.38 },
+    { key: "inverter", label: "Inverter", share: 0.22 },
+    { key: "mounting", label: "Mounting and racking", share: 0.12 },
+    { key: "electrical", label: "Wiring, breakers and protection", share: 0.1 },
+    { key: "labor", label: "Labor and installation", share: 0.14 },
+    { key: "permits", label: "Permits and net-metering application", share: 0.04 },
+  ],
+  hybrid: [
+    { key: "panels", label: "Solar panels", share: 0.24 },
+    { key: "battery", label: "Battery bank", share: 0.32 },
+    { key: "inverter", label: "Hybrid inverter", share: 0.16 },
+    { key: "mounting", label: "Mounting and racking", share: 0.08 },
+    { key: "electrical", label: "Wiring, breakers and protection", share: 0.08 },
+    { key: "labor", label: "Labor and installation", share: 0.1 },
+    { key: "permits", label: "Permits and documentation", share: 0.02 },
+  ],
+  "off-grid": [
+    { key: "battery", label: "Battery bank", share: 0.4 },
+    { key: "panels", label: "Solar panels", share: 0.22 },
+    { key: "inverter", label: "Off-grid inverter/charger", share: 0.15 },
+    { key: "mounting", label: "Mounting and racking", share: 0.07 },
+    { key: "electrical", label: "Wiring, breakers and protection", share: 0.07 },
+    { key: "labor", label: "Labor and installation", share: 0.08 },
+    { key: "permits", label: "Permits and documentation", share: 0.01 },
+  ],
+};

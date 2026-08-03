@@ -10,7 +10,7 @@ export default function Footer() {
           {/* Brand + disclaimer */}
           <div>
             <span className="inline-flex rounded-lg bg-white px-3 py-2">
-              <Logo />
+              <Logo className="h-9 w-auto" />
             </span>
             <p className="mt-6 max-w-sm font-body text-sm leading-relaxed text-white/70">
               A free solar sizing calculator for Philippine homes. Built by an

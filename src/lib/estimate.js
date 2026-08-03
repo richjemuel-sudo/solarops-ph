@@ -4,6 +4,10 @@ import {
   DERATE,
   PANEL_WATTS,
   SQM_PER_KWP,
+  PANEL_SPEC,
+  INVERTER_SIZES_KW,
+  INVERTER_TYPES,
+  COST_BREAKDOWN,
 } from "../data/content";
 import { findProvider } from "../data/providers";
 import { findAppliance } from "../data/appliances";
@@ -31,6 +35,18 @@ export const formatRuntime = (hours) => {
 export const formatWatts = (w) =>
   `${Math.round(w).toLocaleString("en-PH")} W`;
 
+/**
+ * Array size reads as watts-peak below 1 kWp — "600 Wp", not "0.6 kWp".
+ * Nobody in the field says nought-point-six kilowatt-peak.
+ */
+export const formatArraySize = (kwp) =>
+  kwp < 1
+    ? `${Math.round(kwp * 1000).toLocaleString("en-PH")} Wp`
+    : `${kwp.toFixed(2)} kWp`;
+
+export const pluralize = (n, one, many = `${one}s`) =>
+  `${n} ${n === 1 ? one : many}`;
+
 /* -------------------------------------------------------------- constants */
 
 // Usable share of a LiFePO4 bank: 90% depth of discharge × 90% inverter
@@ -38,6 +54,10 @@ export const formatWatts = (w) =>
 const DEPTH_OF_DISCHARGE = 0.9;
 const INVERTER_EFFICIENCY = 0.9;
 const USABLE_FRACTION = DEPTH_OF_DISCHARGE * INVERTER_EFFICIENCY;
+
+// The inverter is sized at twice the array so there is real headroom for motor
+// starting surge, not just steady-state capacity.
+const INVERTER_ARRAY_HEADROOM = 2;
 
 // Households never run every appliance simultaneously. This is the share of
 // combined nameplate load a battery is actually sized to carry.
@@ -66,6 +86,44 @@ const BATTERY_CAPACITIES_AH = [
 // more busbar than battery.
 const PARALLEL_CAPACITIES_AH = [200, 230, 250, 280, 300, 314, 324];
 const MAX_PARALLEL_STRINGS = 4;
+
+/**
+ * Picks a real, buyable inverter.
+ *
+ * The requirement is the largest of three things: twice the array (surge
+ * headroom, per field practice), the running load plus 25%, and the running
+ * load plus the largest motor's starting surge. Then round UP to a capacity
+ * that's actually sold — you can't order a 3.1 kW unit.
+ */
+export function selectInverter(kwp, loads, systemType) {
+  const fromArray = kwp * INVERTER_ARRAY_HEADROOM;
+  const fromLoad = loads ? (loads.totalRunningW * 1.25) / 1000 : 0;
+  const fromSurge = loads ? loads.peakSurgeW / 1000 : 0;
+  const required = Math.max(fromArray, fromLoad, fromSurge);
+
+  const rated =
+    INVERTER_SIZES_KW.find((kw) => kw >= required) ??
+    INVERTER_SIZES_KW[INVERTER_SIZES_KW.length - 1];
+
+  const type = INVERTER_TYPES[systemType] ?? INVERTER_TYPES["grid-tied"];
+
+  // Which constraint actually set the size — useful in the spec sheet.
+  let driver = "array size";
+  if (fromSurge >= fromArray && fromSurge >= fromLoad) driver = "motor starting surge";
+  else if (fromLoad > fromArray) driver = "connected running load";
+
+  return {
+    ratedKw: rated,
+    requiredKw: Math.round(required * 100) / 100,
+    driver,
+    family: type.family,
+    note: type.note,
+    // A string inverter wants the array within its MPPT window; 1.3x the
+    // array is the usual DC input ceiling.
+    maxDcInputKwp: Math.round(rated * 1.3 * 100) / 100,
+    undersized: required > INVERTER_SIZES_KW[INVERTER_SIZES_KW.length - 1],
+  };
+}
 
 /**
  * Picks a real, buyable bank: nominal voltage from inverter size, then the
@@ -194,10 +252,15 @@ export function estimate({ bill, provider, systemType, appliances = [] }) {
   const costLow = costMid * 0.88;
   const costHigh = costMid * 1.12;
 
-  // Exported energy earns generation-cost credits, not the retail rate,
-  // so savings are discounted to ~90% of the offset value.
-  const monthlySavings = Math.min(amount * system.offset * 0.9, amount);
-  const newBill = amount - monthlySavings;
+  // Off-grid means disconnecting from the utility entirely — there is no bill
+  // left to pay, so the whole amount is saved. Grid-tied and hybrid stay
+  // connected, and their exported energy earns generation-cost credits rather
+  // than the retail rate, so savings are discounted to ~90% of the offset.
+  const offGrid = system.value === "off-grid";
+  const monthlySavings = offGrid
+    ? amount
+    : Math.min(amount * system.offset * 0.9, amount);
+  const newBill = offGrid ? 0 : amount - monthlySavings;
   const paybackYears = costMid / (monthlySavings * 12);
 
   /* ------------------------------------------------------------- loads */
@@ -206,17 +269,9 @@ export function estimate({ bill, provider, systemType, appliances = [] }) {
 
   /* --------------------------------------------------------- inverter */
 
-  // The inverter has to cover the array, carry the running load, and start
-  // the largest motor. Whichever is biggest wins, then round to a half kW.
-  // This is computed before the battery because it sets the bank voltage.
-  const inverterKw =
-    Math.ceil(
-      Math.max(
-        kwp * 1.1,
-        loads ? (loads.totalRunningW * 1.25) / 1000 : 0,
-        loads ? loads.peakSurgeW / 1000 : 0
-      ) * 2
-    ) / 2;
+  // Computed before the battery, because inverter capacity sets bank voltage.
+  const inverter = selectInverter(kwp, loads, system.value);
+  const inverterKw = inverter.ratedKw;
 
   /* ---------------------------------------------------------- battery */
 
@@ -265,6 +320,17 @@ export function estimate({ bill, provider, systemType, appliances = [] }) {
     };
   }
 
+  /* --------------------------------------------------- cost breakdown */
+
+  // Split the installed cost into line items, so the blueprint shows where
+  // the money actually goes instead of one opaque number.
+  const costItems = (COST_BREAKDOWN[system.value] ?? []).map((item) => ({
+    ...item,
+    low: costLow * item.share,
+    high: costHigh * item.share,
+    mid: costMid * item.share,
+  }));
+
   return {
     billAmount: amount,
     utility,
@@ -275,6 +341,14 @@ export function estimate({ bill, provider, systemType, appliances = [] }) {
     panels,
     roofArea,
     inverterKw,
+    inverter,
+    panel: {
+      ...PANEL_SPEC,
+      count: panels,
+      installedKwp: (panels * PANEL_WATTS) / 1000,
+      arraySqm: panels * PANEL_SPEC.areaSqm,
+    },
+    offGrid,
     costLow,
     costHigh,
     costMid,
@@ -283,6 +357,7 @@ export function estimate({ bill, provider, systemType, appliances = [] }) {
     paybackYears,
     loads,
     battery,
+    costItems,
     // Cross-check: what the picked appliances alone would cost per month.
     applianceMonthlyKwh: loads ? (loads.dailyWh * 30) / 1000 : null,
     applianceMonthlyCost: loads

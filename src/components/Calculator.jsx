@@ -98,7 +98,7 @@ export default function Calculator() {
                       value={bill}
                       onChange={(e) => setBillValue(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleCalculate()}
-                      placeholder="e.g. 2,500"
+                      placeholder="e.g. 1,500"
                       aria-describedby={error ? "bill-error" : undefined}
                       aria-invalid={Boolean(error)}
                       className="w-full rounded-xl border border-navy/15 bg-white py-3.5 pl-9 pr-4 font-body text-base text-navy placeholder:text-slate-body/50 focus:border-solar focus:outline-none focus:ring-2 focus:ring-solar/40"
